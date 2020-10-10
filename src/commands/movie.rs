@@ -4,6 +4,7 @@ use serenity::framework::standard::{
     Args, CommandResult,
     macros::command,
 };
+use serenity::utils::parse_username;
 use tracing::{info, error};
 
 use crate::db::{
@@ -33,7 +34,7 @@ pub async fn submit(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
             data_read.get::<DBConnectionContainer>().expect("Expected DBConnection in TypeMap.").clone()
         };
 
-        let num_added = moviesubs::create_moviesub(&db_pool.get().unwrap(), 1, movie_submission, "test");
+        let num_added = moviesubs::create_moviesub(&db_pool.get().unwrap(), &msg.author.id.to_string(), movie_submission, "test");
         info!("Added {} movie submissions.", num_added);
 
         let response = format!("You've submitted the movie: {}", movie_submission);
@@ -66,7 +67,7 @@ pub async fn getsubs(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
     for movie_sub in movie_subs.clone() {
         response.push_str(&format!("{}: {}", movie_sub.title, movie_sub.dis_user_id));
     }
-    
+
     msg.channel_id.say(&ctx.http, response).await?;
 
     Ok(())

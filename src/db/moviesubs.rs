@@ -13,7 +13,7 @@ pub fn get_moviesubs(conn: &SqliteConnection) -> Vec<MovieSub> {
 }
 
 use crate::models::NewMovieSub;
-pub fn create_moviesub<'a>(conn: &SqliteConnection, dis_user_id: i32, title: &'a str, link: &'a str) -> usize {
+pub fn create_moviesub<'a>(conn: &SqliteConnection, dis_user_id: &'a str, title: &'a str, link: &'a str) -> usize {
     use crate::schema::moviesubs;
 
     let new_post = NewMovieSub {
