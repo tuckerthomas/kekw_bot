@@ -1,0 +1,19 @@
+[package]
+name = "kekw_bot"
+version = "0.1.0"
+authors = ["tuckerthomas <tuckerthomas@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dotenv = "0.15"
+tracing = "0.1"
+tracing-subscriber = "0.2"
+tokio = { version = "0.2", features = ["macros"] }
+diesel = { version = "1.4", features = ["sqlite", "r2d2"] }
+diesel_migrations = { version = "1.4", features = ["sqlite"] }
+
+[dependencies.serenity]
+version = "0.9.0-rc.2"
+features = ["framework", "standard_framework"]
