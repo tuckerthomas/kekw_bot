@@ -8,3 +8,11 @@ steps:
   commands:
   - cargo build --release --verbose --all
   - cargo test --verbose --all
+
+- name: docker  
+  image: plugins/docker
+  settings:
+    username: shrug
+    password: shrug
+    repo: localhost:5000
+    dockerfile: Dockerfile
