@@ -12,7 +12,7 @@ steps:
 - name: docker  
   image: plugins/docker
   settings:
-    username: shrug
-    password: shrug
+    username: tthomas
+    password: test
     repo: localhost:5000
     dockerfile: Dockerfile
