@@ -84,7 +84,15 @@ struct Movie;
 
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().expect("Failted to load .env file");
+    match env::var("PROD") {
+        Ok(prod) => {
+            info!("Running in production");
+        }
+        Err(e) => {
+            info!("Running in dev");
+            dotenv::dotenv().expect("Failted to load .env file");
+        }
+    }
 
     // Initialize the logger to use environment variables.
     //
@@ -101,10 +109,10 @@ async fn main() {
     let new_pool = pool.clone();
     // By default the output is thrown out. If you want to redirect it to stdout, you
     // should call embedded_migrations::run_with_output.
-    embedded_migrations::run_with_output(&new_pool.get().unwrap(), &mut std::io::stdout()); 
+    embedded_migrations::run_with_output(&new_pool.get().unwrap(), &mut std::io::stdout()).unwrap(); 
 
     let token = env::var("DISCORD_TOKEN")
-        .expect("Expected a token in the environment");
+        .expect("Expected DISCORD_TOKEN to be set");
 
     let http = Http::new_with_token(&token);
 
@@ -148,8 +156,6 @@ async fn main() {
 }
 
 pub fn establish_connection() -> Pool::<ConnectionManager::<SqliteConnection>> {
-    dotenv::dotenv().expect("Failted to load .env file");
-
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL not set!");
 
     Pool::builder().build(ConnectionManager::<SqliteConnection>::new(database_url)).expect("Could not creat pool")
