@@ -7,12 +7,16 @@ steps:
   image: rust:1
   commands:
   - cargo build --release --verbose --all
-  - cargo test --verbose --all
+  - cargo test --release --verbose --all
 
-- name: docker  
+- name: registry_deploy  
   image: plugins/docker
   settings:
+    registry: drone.tuckerthomas.com:5000
     username: tthomas
     password: test
-    repo: localhost:5000
+    repo: drone.tuckerthomas.com:5000/kekw
+    insecure: true
     dockerfile: Dockerfile
+    tags: "0.1"
+    
