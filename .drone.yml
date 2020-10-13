@@ -12,11 +12,10 @@ steps:
 - name: registry_deploy  
   image: plugins/docker
   settings:
-    registry: drone.tuckerthomas.com:5000
+    registry: registry.tuckerthomas.com
     username: tthomas
     password: test
-    repo: drone.tuckerthomas.com:5000/kekw
+    repo: registry.tuckerthomas.com/kekw
     insecure: true
     dockerfile: Dockerfile
     tags: "0.1"
-    
