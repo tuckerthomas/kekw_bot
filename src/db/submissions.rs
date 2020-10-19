@@ -14,19 +14,14 @@ pub fn get_moviesubs(conn: &SqliteConnection) -> Vec<Submission> {
 }
 
 use crate::models::submission::NewSubmission;
-pub fn create_moviesub<'a>(conn: &SqliteConnection, dis_user_id: &'a str, title: &'a str, link: &'a str) -> usize {
+pub fn create_moviesub<'a>(conn: &SqliteConnection, dis_user_id: &'a str, title: &'a str, link: &'a str, period_id: i32) -> usize {
     use crate::schema::submissions;
-    use crate::db::periods;
-
-    periods::create_period(conn);
-
-    let new_period = periods::get_most_recent_period(conn);
 
     let new_post = NewSubmission {
         dis_user_id: dis_user_id,
         title: title,
         link: link,
-        period_id: new_period.id
+        period_id: period_id
     };
 
     diesel::insert_into(submissions::table)

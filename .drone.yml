@@ -6,6 +6,7 @@ steps:
 - name: test
   image: rust:1
   commands:
+  - cargo clean
   - cargo build --release --verbose --all
   - cargo test --release --verbose --all
 
