@@ -13,6 +13,8 @@ tracing-subscriber = "0.2"
 tokio = { version = "0.2", features = ["macros"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2"] }
 diesel_migrations = { version = "1.4", features = ["sqlite"] }
+rand = { version = "0.7", features = ["small_rng"] }
+chrono = { version = "0.4"}
 
 [dependencies.serenity]
 version = "0.9.0-rc.2"

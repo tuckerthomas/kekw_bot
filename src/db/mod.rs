@@ -7,7 +7,9 @@ use serenity::prelude::{
     TypeMapKey
 };
 
-pub mod moviesubs;
+pub mod periods;
+pub mod submissions;
+pub mod rolls;
 
 // Setup DB Connection data for Context
 pub struct DBConnectionContainer;

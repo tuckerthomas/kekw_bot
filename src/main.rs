@@ -77,9 +77,9 @@ struct General;
 
 #[group]
 #[prefix = "m"]
-#[description = "Submit a moview to Movie Night!"]
+#[description = "Submit a movie to Movie Night!"]
 #[default_command(submit)]
-#[commands(getsubs)]
+#[commands(getsubs, roll)]
 struct Movie;
 
 #[tokio::main]

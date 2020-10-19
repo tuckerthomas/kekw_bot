@@ -1,2 +1,4 @@
 -- This file should undo anything in `up.sql`
-DROP TABLE moviesubs
+DROP TABLE rolls;
+DROP TABLE submissions;
+DROP TABLE periods;
