@@ -79,7 +79,7 @@ struct General;
 #[prefix = "m"]
 #[description = "Submit a movie to Movie Night!"]
 #[default_command(submit)]
-#[commands(getsubs, roll)]
+#[commands(getsubs, roll, startperiod)]
 struct Movie;
 
 #[tokio::main]

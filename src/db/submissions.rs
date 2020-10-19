@@ -2,11 +2,11 @@ use diesel::prelude::*;
 
 use crate::models::submission::Submission;
 
-pub fn get_moviesubs(conn: &SqliteConnection) -> Vec<Submission> {
+pub fn get_moviesubs(conn: &SqliteConnection, cur_period_id: i32) -> Vec<Submission> {
     use crate::schema::submissions::dsl::*;
 
     let results = submissions
-        .limit(5)
+        .filter(period_id.eq(cur_period_id))
         .load::<Submission>(conn)
         .expect("Error loading submissions");
 
