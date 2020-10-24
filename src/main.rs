@@ -36,7 +36,6 @@ use tracing_subscriber::{
 
 
 // Diesel
-use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use diesel::r2d2::{
     ConnectionManager,
@@ -76,10 +75,10 @@ impl EventHandler for Handler {
 struct General;
 
 #[group]
-#[prefix = "m"]
+#[prefix = "q"]
 #[description = "Submit a movie to Movie Night!"]
 #[default_command(submit)]
-#[commands(getsubs, roll, startperiod)]
+#[commands(getsubs, roll, startperiod, reopenperiod)]
 struct Movie;
 
 #[tokio::main]
