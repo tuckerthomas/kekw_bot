@@ -50,62 +50,35 @@ pub async fn submit(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     );
                     msg.channel_id.say(&ctx.http, response).await?;
                 } else {
-                    // Used to convert character to reaction
-                    use std::convert::TryFrom;
-                    let mut reactions: Vec<ReactionType> = Vec::new();
-                    reactions.push(ReactionType::try_from("✅").unwrap());
-                    reactions.push(ReactionType::try_from("❎").unwrap());
+                    let conf_message = format!("You've already submitted the movie: {}, would you like to update your submission?", movie_subs[0].title);
+                    let yes_msg = String::from("Submission updated!");
+                    let no_msg = String::from("Submission not updated.");
 
-                    response = format!("You've already submitted the movie: {}, would you like to update your submission?", movie_subs[0].title);
+                    use crate::utils::Confirmation;
 
-                    let mut update_sub_msg = msg
-                        .channel_id
-                        .send_message(&ctx.http, |m| {
-                            m.content(response);
-                            m.reactions(reactions);
-
-                            m
-                        })
-                        .await
-                        .unwrap();
-
-                    if let Some(reaction) = &update_sub_msg
-                        .await_reaction(&ctx)
-                        .timeout(std::time::Duration::from_secs(10))
-                        .author_id(msg.author.id)
-                        .await
-                    {
-                        let emoji = &reaction.as_inner_ref().emoji;
-                        let _ = match emoji.as_data().as_str() {
-                            "✅" => {
-                                submissions::delete_moviesub(
-                                    &db_pool.get().unwrap(),
-                                    movie_subs[0].id,
-                                );
-                                submissions::create_moviesub(
-                                    &db_pool.get().unwrap(),
-                                    &msg.author.id.to_string(),
-                                    movie_submission,
-                                    "test",
-                                    cur_period.id,
-                                );
-                                update_sub_msg
-                                    .edit(ctx, |m| m.content("Submission updated!"))
-                                    .await?;
-                                update_sub_msg.delete_reactions(ctx).await?;
-                                Ok(update_sub_msg)
-                            }
-                            "❎" => {
-                                update_sub_msg
-                                    .edit(ctx, |m| m.content("Submission not updated."))
-                                    .await?;
-                                update_sub_msg.delete_reactions(ctx).await?;
-                                Ok(update_sub_msg)
-                            }
-                            _ => msg.reply(ctx, "Please react with ✅ or ❎").await,
-                        };
-                    } else {
-                        msg.reply(ctx, "No reaction within 10 seconds.").await?;
+                    match crate::utils::ask_confirmation(&ctx, msg.author.id, msg.channel_id, conf_message, yes_msg, no_msg).await {
+                        Ok(Confirmation::Yes) => {
+                            submissions::delete_moviesub(
+                                &db_pool.get().unwrap(),
+                                movie_subs[0].id,
+                            );
+                            submissions::create_moviesub(
+                                &db_pool.get().unwrap(),
+                                &msg.author.id.to_string(),
+                                movie_submission,
+                                "test",
+                                cur_period.id,
+                            );
+                        }
+                        Ok(Confirmation::No) => {
+                            ()
+                        }
+                        Ok(Confirmation::InvalidConfirmation) => {
+                            msg.reply(ctx, "Error").await?;
+                        }
+                        _ => {
+                            msg.reply(ctx, "Error").await?;
+                        }
                     }
                 }
             }
@@ -215,85 +188,50 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     // Get most recent period
     match periods::get_most_recent_period(&db_pool) {
         Ok(cur_period) => {
-            use crate::models::roll::Roll;
-            use diesel::BelongingToDsl;
-            use diesel::RunQueryDsl;
+            let mut do_new_roll = false;
 
-            // TODO: If a current roll exists, ask the user if they want to roll a new one, or use the existing
-            let mut cur_roll_exists = true;
-            
             // Check if a roll already exists
-            match Roll::belonging_to(&cur_period).first::<Roll>(&db_pool.get()?) {
-                Ok(_) => {
-                    info!("Current roll exists...");
-                    cur_roll_exists = false;
-                },
-                Err(_) => ()
+            if let Ok(cur_roll) = rolls::get_roll_by_period(&db_pool, cur_period) {
+                let conf_message = format!("There already exists a roll for this movie submission period, would you like to roll again?");
+                let yes_msg = String::from("Rolling again!");
+                let no_msg = String::from("Cancelling roll.");
+
+                use crate::utils::Confirmation;
+                do_new_roll = match crate::utils::ask_confirmation(&ctx, msg.author.id, msg.channel_id, conf_message, yes_msg, no_msg).await {
+                    Ok(Confirmation::Yes) => {
+                        rolls::delete_roll(&db_pool.clone(), cur_roll.id)?;
+                        true
+                    }
+                    Ok(Confirmation::No) => {
+                        return Ok(());
+                    }
+                    _ => {
+                        return Ok(());
+                    }
+                };
             }
-            
 
             // Get movie submissions for the current period
             let movie_subs = submissions::get_moviesubs(&db_pool.get().unwrap(), cur_period.id);
             info!("Got {} movie submission(s).", movie_subs.len());
 
             if movie_subs.len() >= 2 {
+
                 // Confirm roll
-                // Used to convert character to reaction
-                use std::convert::TryFrom;
+                let conf_message = String::from("Would you like to roll for movie night?");
+                let yes_msg = String::from("Starting roll");
+                let no_msg = String::from("Cancelling roll");
 
-                let mut reactions: Vec<ReactionType> = Vec::new();
-                reactions.push(ReactionType::try_from("✅").unwrap());
-                reactions.push(ReactionType::try_from("❎").unwrap());
+                use crate::utils::Confirmation;
 
-                let mut update_sub_msg = msg
-                    .channel_id
-                    .send_message(&ctx.http, |m| {
-                        m.content("Would you like to roll for movie night?");
-                        m.reactions(reactions);
-
-                        m
-                    })
-                    .await
-                    .unwrap();
-
-                let mut start_roll = false;
-
-                // Wait for confirmation reaction
-                if let Some(reaction) = &update_sub_msg
-                    .await_reaction(&ctx)
-                    .timeout(std::time::Duration::from_secs(10))
-                    .author_id(msg.author.id)
-                    .await
-                {
-                    let emoji = &reaction.as_inner_ref().emoji;
-
-                    let _ = match emoji.as_data().as_str() {
-                        "✅" => {
-                            update_sub_msg
-                                .edit(ctx, |m| m.content("Starting roll"))
-                                .await?;
-                            update_sub_msg.delete_reactions(ctx).await?;
-
-                            start_roll = true;
-                            Ok(update_sub_msg)
-                        }
-                        "❎" => {
-                            update_sub_msg
-                                .edit(ctx, |m| m.content("Cancelling roll"))
-                                .await?;
-                            update_sub_msg.delete_reactions(ctx).await?;
-
-                            start_roll = false;
-                            Ok(update_sub_msg)
-                        }
-                        _ => msg.reply(ctx, "Please react with ✅ or ❎").await,
-                    };
-                } else {
-                    msg.reply(ctx, "No reaction within 10 seconds.").await?;
-                }
+                let start_roll = match crate::utils::ask_confirmation(&ctx, msg.author.id, msg.channel_id, conf_message, yes_msg, no_msg).await {
+                    Ok(Confirmation::Yes) => true,
+                    Ok(Confirmation::No) => false,
+                    _ => false
+                };
 
                 // User decided to start a roll
-                if start_roll == true {
+                if start_roll && do_new_roll {
                     // End current submission period
                     periods::end_period(&db_pool, cur_period)?;
 
@@ -325,6 +263,7 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     // Insert roll into roll table
                     rolls::create_roll(&db_pool, cur_period.id, choice_movie1.id, choice_movie2.id)?;
 
+                    use std::convert::TryFrom;
                     // Lookup user by discord id
                     let choice_user1 =
                         UserId::try_from(choice_movie1.dis_user_id.parse::<u64>().unwrap())

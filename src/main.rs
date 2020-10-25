@@ -9,6 +9,7 @@ mod commands;
 mod db;
 mod models;
 mod schema;
+mod utils;
 
 // Imports
 use std::{
@@ -75,7 +76,7 @@ impl EventHandler for Handler {
 struct General;
 
 #[group]
-#[prefix = "m"]
+#[prefix = "q"]
 #[description = "Submit a movie to Movie Night!"]
 #[default_command(submit)]
 #[commands(getsubs, roll, startperiod, reopenperiod)]
@@ -89,7 +90,7 @@ async fn main() {
         }
         Err(e) => {
             info!("Running in dev");
-            dotenv::dotenv().expect("Failted to load .env file");
+            dotenv::dotenv().expect("Failed to load .env file");
         }
     }
 
