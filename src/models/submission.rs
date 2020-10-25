@@ -1,7 +1,7 @@
 use crate::schema::submissions;
 use crate::models::period::Period;
 
-#[derive(Identifiable, Queryable, Associations, PartialEq, Clone, Debug)]
+#[derive(Identifiable, Queryable, Associations, AsChangeset, PartialEq, Clone, Debug)]
 #[belongs_to(Period)]
 pub struct Submission {
     pub id: i32,

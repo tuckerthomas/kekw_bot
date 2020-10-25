@@ -15,6 +15,9 @@ diesel = { version = "1.4", features = ["sqlite", "r2d2", "numeric"] }
 diesel_migrations = { version = "1.4", features = ["sqlite"] }
 rand = { version = "0.7", features = ["small_rng"] }
 chrono = { version = "0.4"}
+serde = { version = "1"}
+serde_json = { version = "1" }
+reqwest = "0.10"
 
 [dependencies.serenity]
 version = "0.9.0-rc.2"

@@ -8,6 +8,7 @@ extern crate diesel_migrations;
 mod commands;
 mod db;
 mod models;
+mod omdb;
 mod schema;
 mod utils;
 
@@ -76,10 +77,10 @@ impl EventHandler for Handler {
 struct General;
 
 #[group]
-#[prefix = "m"]
+#[prefix = "q"]
 #[description = "Submit a movie to Movie Night!"]
 #[default_command(submit)]
-#[commands(getsubs, roll, startperiod, reopenperiod)]
+#[commands(getsubs, roll, startperiod, reopenperiod, fixdb)]
 struct Movie;
 
 #[tokio::main]

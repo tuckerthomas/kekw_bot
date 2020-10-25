@@ -58,17 +58,10 @@ pub async fn submit(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
                     match crate::utils::ask_confirmation(&ctx, msg.author.id, msg.channel_id, conf_message, yes_msg, no_msg).await {
                         Ok(Confirmation::Yes) => {
-                            submissions::delete_moviesub(
-                                &db_pool.get().unwrap(),
-                                movie_subs[0].id,
-                            );
-                            submissions::create_moviesub(
-                                &db_pool.get().unwrap(),
-                                &msg.author.id.to_string(),
-                                movie_submission,
-                                "test",
-                                cur_period.id,
-                            );
+                            // TODO: Make update_moviesub
+                            let mut updated_moviesub = movie_subs[0].clone();
+                            updated_moviesub.title = String::from(movie_submission);
+                            submissions::update_moviesub(&db_pool, updated_moviesub)?;
                         }
                         Ok(Confirmation::No) => {
                             ()
@@ -131,10 +124,12 @@ pub async fn getsubs(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
                     .unwrap()
                     .to_user(&ctx.http)
                     .await?;
-                let nick = user
+                let nick =  match user
                     .nick_in(&ctx.http, msg.guild_id.unwrap())
-                    .await
-                    .unwrap();
+                    .await {
+                        Some(nick) => nick,
+                        None => String::from("")
+                    };
                 dis_movie_subs.push(DisMovieSub {
                     movie_sub,
                     user,
@@ -149,11 +144,19 @@ pub async fn getsubs(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
                     m.embed(|e| {
                         e.title("Current Movie Submissions");
                         for dis_movie_sub in dis_movie_subs {
-                            e.field(
-                                format!("{}({})", dis_movie_sub.nick, dis_movie_sub.user.name),
-                                dis_movie_sub.movie_sub.title,
-                                false,
-                            );
+                            if dis_movie_sub.nick.is_empty() {
+                                e.field(
+                                    format!("{}", dis_movie_sub.user.name),
+                                    dis_movie_sub.movie_sub.title,
+                                    false,
+                                );
+                            } else {
+                                e.field(
+                                    format!("{}({})", dis_movie_sub.nick, dis_movie_sub.user.name),
+                                    dis_movie_sub.movie_sub.title,
+                                    false,
+                                );
+                            }
                         }
                         e
                     });
@@ -465,5 +468,52 @@ pub async fn reopenperiod(ctx: &Context, msg: &Message, args: Args) -> CommandRe
                 .unwrap();
         }
     }
+    Ok(())
+}
+
+#[command]
+pub async fn fixdb(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let db_pool = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<DBConnectionContainer>()
+            .expect("Expected DBConnection in TypeMap.")
+            .clone()
+    };
+
+    let movie_subs = submissions::get_all_moviesubs(&db_pool);
+
+    for movie_sub in movie_subs {
+        let movie_title = movie_sub.title.clone();
+        let keys = movie_title.split(" ");
+
+        for key in keys {
+            if key.contains("imdb") && key.contains("http") {
+                if let Ok(imdb_url) = reqwest::Url::parse(key) {
+                    let path_segments = imdb_url.path_segments().ok_or_else(|| "cannot be base")?;
+
+                    for path_segment in path_segments {
+                        if path_segment.starts_with("tt") {
+                            use crate::omdb;
+
+                            println!("Found imdb link {}", path_segment);
+
+                            let movie = omdb::query_by_id(String::from(path_segment)).await.unwrap().unwrap();
+
+                            let mut updated_moviesub = movie_sub.clone();
+
+                            println!("Updating movie submission id: {}", updated_moviesub.id);
+
+                            updated_moviesub.title = movie.title;
+                            updated_moviesub.link = movie.imdb_id;
+
+                            submissions::update_moviesub(&db_pool, updated_moviesub)?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
