@@ -76,7 +76,7 @@ impl EventHandler for Handler {
 struct General;
 
 #[group]
-#[prefix = "q"]
+#[prefix = "m"]
 #[description = "Submit a movie to Movie Night!"]
 #[default_command(submit)]
 #[commands(getsubs, roll, startperiod, reopenperiod)]
