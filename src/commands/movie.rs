@@ -30,6 +30,7 @@ pub async fn submit(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             Ok(cur_period) => {
                 let movie_subs = submissions::check_prev_sub(
                     &db_pool.get().unwrap(),
+                    cur_period.id,
                     &msg.author.id.to_string(),
                 );
 
@@ -282,14 +283,8 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                             .unwrap();
 
                     // Get current nickname in current guild
-                    let choice_nick1 = choice_user1
-                        .nick_in(&ctx.http, msg.guild_id.unwrap())
-                        .await
-                        .unwrap();
-                    let choice_nick2 = choice_user2
-                        .nick_in(&ctx.http, msg.guild_id.unwrap())
-                        .await
-                        .unwrap();
+                    let choice_nick1 = choice_user1.name;
+                    let choice_nick2 = choice_user2.name;
 
                     // Respond with movie selection message
                     let msg_movie_selection = msg.channel_id.send_message(&ctx.http, |m| {

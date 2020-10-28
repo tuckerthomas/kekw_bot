@@ -71,12 +71,11 @@ pub fn delete_moviesub<'a>(conn: &SqliteConnection, del_id: i32) -> usize {
         .expect("Error deleting submission")
 }
 
-pub fn check_prev_sub<'a>(conn: &SqliteConnection, check_dis_user_id: &'a str) -> Vec<Submission> {
+pub fn check_prev_sub<'a>(conn: &SqliteConnection, cur_period_id: i32, check_dis_user_id: &'a str) -> Vec<Submission> {
     use crate::schema::submissions::dsl::*;
 
     let results = submissions
-        .filter(dis_user_id.eq(check_dis_user_id))
-        .limit(5)
+        .filter(period_id.eq(cur_period_id).and(dis_user_id.eq(check_dis_user_id)))
         .load::<Submission>(conn)
         .expect("Error loading submissions");
 
