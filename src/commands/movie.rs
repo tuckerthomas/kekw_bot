@@ -180,6 +180,42 @@ pub async fn getsubs(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
 }
 
 #[command]
+pub async fn deletesub(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let db_pool = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<DBConnectionContainer>()
+            .expect("Expected DBConnection in TypeMap.")
+            .clone()
+    };
+
+    if msg.mentions.len() == 0 {
+        msg.reply(&ctx.http, "Please provide the user(s) you would like to delete the submissions for!").await?;
+        return Ok(());
+    }
+
+    match periods::get_most_recent_period(&db_pool) {
+        Err(_) => {
+            msg.reply(&ctx.http, "No current movie submission period exists.").await?;
+        }
+        Ok(cur_period) => {
+            for user in &msg.mentions {
+                match submissions::get_submission_by_period_and_user(&db_pool, cur_period, user.id.to_string()) {
+                    Ok(sub) => {
+                        submissions::delete_moviesub(&db_pool, &sub);
+                        msg.reply(&ctx.http, &format!("Deleted submission {} for {}.", sub.title, user.name)).await?;
+                    }
+                    Err(_) => {
+                        msg.reply(&ctx.http, &format!("Submission does not exist for {}.", user.name)).await?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[command]
 pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db_pool = {
         let data_read = ctx.data.read().await;

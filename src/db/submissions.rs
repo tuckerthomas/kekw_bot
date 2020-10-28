@@ -2,6 +2,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
 use crate::models::submission::Submission;
+use crate::models::period::Period;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
 
@@ -24,6 +25,19 @@ pub fn get_all_moviesubs(pool: &Pool<ConnectionManager<SqliteConnection>>) -> Ve
         .expect("Error loading submissions");
 
     return results;
+}
+
+pub fn get_submission_by_period_and_user(
+    pool: &Pool<ConnectionManager<SqliteConnection>>,
+    search_period: Period,
+    user_id: String
+) -> Result<Submission> {
+    use crate::schema::submissions::dsl::*;
+
+    match Submission::belonging_to(&search_period).filter(dis_user_id.eq(user_id)).first::<Submission>(&pool.get()?) {
+        Ok(submission) => Ok(submission),
+        Err(e) => Err(Box::new(e)),
+    }
 }
 
 use crate::models::submission::NewSubmission;
@@ -62,12 +76,12 @@ pub fn update_moviesub<'a>(
     }
 }
 
-pub fn delete_moviesub<'a>(conn: &SqliteConnection, del_id: i32) -> usize {
+pub fn delete_moviesub<'a>(pool: &Pool<ConnectionManager<SqliteConnection>>, del_submission: &Submission) -> usize {
     use crate::schema::submissions;
     use crate::schema::submissions::dsl::*;
 
-    diesel::delete(submissions::table.filter(id.eq(del_id)))
-        .execute(conn)
+    diesel::delete(del_submission)
+        .execute(&pool.get().unwrap())
         .expect("Error deleting submission")
 }
 
