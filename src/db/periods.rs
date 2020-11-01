@@ -24,16 +24,17 @@ impl std::fmt::Display for PeriodError {
     }
 }
 
-pub fn get_periods(conn: &SqliteConnection) -> Vec<Period> {
+pub fn get_periods(pool: &Pool<ConnectionManager<SqliteConnection>>) -> Result<Vec<Period>> {
     use crate::schema::periods::dsl::*;
 
-    let results = periods
+    match periods
         .order(id.desc())
-        .limit(5)
-        .load::<Period>(conn)
-        .expect("Error loading submissions");
-
-    return results;
+        .limit(10)
+        .load::<Period>(&pool.get()?)
+        {
+            Ok(period) => return Ok(period),
+            Err(e) => Err(Box::new(e)),
+        }
 }
 
 pub fn get_most_recent_period(pool: &Pool<ConnectionManager<SqliteConnection>>) -> Result<Period> {

@@ -4,7 +4,7 @@ use serenity::prelude::*;
 
 use tracing::{error, info};
 
-use crate::db::{periods, submissions, rolls, DBConnectionContainer};
+use crate::db::{periods, rolls, submissions, DBConnectionContainer};
 
 use crate::models::submission::Submission;
 
@@ -57,16 +57,23 @@ pub async fn submit(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
                     use crate::utils::Confirmation;
 
-                    match crate::utils::ask_confirmation(&ctx, msg.author.id, msg.channel_id, conf_message, yes_msg, no_msg).await {
+                    match crate::utils::ask_confirmation(
+                        &ctx,
+                        msg.author.id,
+                        msg.channel_id,
+                        conf_message,
+                        yes_msg,
+                        no_msg,
+                    )
+                    .await
+                    {
                         Ok(Confirmation::Yes) => {
                             // TODO: Make update_moviesub
                             let mut updated_moviesub = movie_subs[0].clone();
                             updated_moviesub.title = String::from(movie_submission);
                             submissions::update_moviesub(&db_pool, updated_moviesub)?;
                         }
-                        Ok(Confirmation::No) => {
-                            ()
-                        }
+                        Ok(Confirmation::No) => (),
                         Ok(Confirmation::InvalidConfirmation) => {
                             msg.reply(ctx, "Error").await?;
                         }
@@ -125,12 +132,10 @@ pub async fn getsubs(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
                     .unwrap()
                     .to_user(&ctx.http)
                     .await?;
-                let nick =  match user
-                    .nick_in(&ctx.http, msg.guild_id.unwrap())
-                    .await {
-                        Some(nick) => nick,
-                        None => String::from("")
-                    };
+                let nick = match user.nick_in(&ctx.http, msg.guild_id.unwrap()).await {
+                    Some(nick) => nick,
+                    None => String::from(""),
+                };
                 dis_movie_subs.push(DisMovieSub {
                     movie_sub,
                     user,
@@ -190,23 +195,40 @@ pub async fn deletesub(ctx: &Context, msg: &Message, args: Args) -> CommandResul
     };
 
     if msg.mentions.len() == 0 {
-        msg.reply(&ctx.http, "Please provide the user(s) you would like to delete the submissions for!").await?;
+        msg.reply(
+            &ctx.http,
+            "Please provide the user(s) you would like to delete the submissions for!",
+        )
+        .await?;
         return Ok(());
     }
 
     match periods::get_most_recent_period(&db_pool) {
         Err(_) => {
-            msg.reply(&ctx.http, "No current movie submission period exists.").await?;
+            msg.reply(&ctx.http, "No current movie submission period exists.")
+                .await?;
         }
         Ok(cur_period) => {
             for user in &msg.mentions {
-                match submissions::get_submission_by_period_and_user(&db_pool, cur_period, user.id.to_string()) {
+                match submissions::get_submission_by_period_and_user(
+                    &db_pool,
+                    cur_period,
+                    user.id.to_string(),
+                ) {
                     Ok(sub) => {
                         submissions::delete_moviesub(&db_pool, &sub);
-                        msg.reply(&ctx.http, &format!("Deleted submission {} for {}.", sub.title, user.name)).await?;
+                        msg.reply(
+                            &ctx.http,
+                            &format!("Deleted submission {} for {}.", sub.title, user.name),
+                        )
+                        .await?;
                     }
                     Err(_) => {
-                        msg.reply(&ctx.http, &format!("Submission does not exist for {}.", user.name)).await?;
+                        msg.reply(
+                            &ctx.http,
+                            &format!("Submission does not exist for {}.", user.name),
+                        )
+                        .await?;
                     }
                 }
             }
@@ -228,35 +250,11 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     // Get most recent period
     match periods::get_most_recent_period(&db_pool) {
         Ok(cur_period) => {
-            let mut do_new_roll = false;
-
-            // Check if a roll already exists
-            if let Ok(cur_roll) = rolls::get_roll_by_period(&db_pool, cur_period) {
-                let conf_message = format!("There already exists a roll for this movie submission period, would you like to roll again?");
-                let yes_msg = String::from("Rolling again!");
-                let no_msg = String::from("Cancelling roll.");
-
-                use crate::utils::Confirmation;
-                do_new_roll = match crate::utils::ask_confirmation(&ctx, msg.author.id, msg.channel_id, conf_message, yes_msg, no_msg).await {
-                    Ok(Confirmation::Yes) => {
-                        rolls::delete_roll(&db_pool.clone(), cur_roll.id)?;
-                        true
-                    }
-                    Ok(Confirmation::No) => {
-                        return Ok(());
-                    }
-                    _ => {
-                        return Ok(());
-                    }
-                };
-            }
-
             // Get movie submissions for the current period
             let movie_subs = submissions::get_moviesubs(&db_pool.get().unwrap(), cur_period.id);
             info!("Got {} movie submission(s).", movie_subs.len());
 
             if movie_subs.len() >= 2 {
-
                 // Confirm roll
                 let conf_message = String::from("Would you like to roll for movie night?");
                 let yes_msg = String::from("Starting roll");
@@ -264,16 +262,53 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
                 use crate::utils::Confirmation;
 
-                let start_roll = match crate::utils::ask_confirmation(&ctx, msg.author.id, msg.channel_id, conf_message, yes_msg, no_msg).await {
+                let start_roll = match crate::utils::ask_confirmation(
+                    &ctx,
+                    msg.author.id,
+                    msg.channel_id,
+                    conf_message,
+                    yes_msg,
+                    no_msg,
+                )
+                .await
+                {
                     Ok(Confirmation::Yes) => true,
                     Ok(Confirmation::No) => false,
-                    _ => false
+                    _ => false,
                 };
 
                 // User decided to start a roll
-                if start_roll && do_new_roll {
+                if start_roll {
                     // End current submission period
                     periods::end_period(&db_pool, cur_period)?;
+
+                    // Check if a roll already exists
+                    if let Ok(cur_roll) = rolls::get_roll_by_period(&db_pool, cur_period) {
+                        let conf_message = format!("There already exists a roll for this movie submission period, would you like to roll again?");
+                        let yes_msg = String::from("Rolling again!");
+                        let no_msg = String::from("Cancelling roll.");
+                        use crate::utils::Confirmation;
+                        match crate::utils::ask_confirmation(
+                            &ctx,
+                            msg.author.id,
+                            msg.channel_id,
+                            conf_message,
+                            yes_msg,
+                            no_msg,
+                        )
+                        .await
+                        {
+                            Ok(Confirmation::Yes) => {
+                                rolls::delete_roll(&db_pool.clone(), cur_roll.id)?;
+                            }
+                            Ok(Confirmation::No) => {
+                                return Ok(());
+                            }
+                            _ => {
+                                return Ok(());
+                            }
+                        };
+                    }
 
                     // Randomization
                     use rand::rngs::SmallRng;
@@ -301,7 +336,12 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     let choice_movie2 = movie_subs[choice_2].clone();
 
                     // Insert roll into roll table
-                    rolls::create_roll(&db_pool, cur_period.id, choice_movie1.id, choice_movie2.id)?;
+                    rolls::create_roll(
+                        &db_pool,
+                        cur_period.id,
+                        choice_movie1.id,
+                        choice_movie2.id,
+                    )?;
 
                     use std::convert::TryFrom;
                     // Lookup user by discord id
@@ -457,7 +497,6 @@ pub async fn startperiod(ctx: &Context, msg: &Message, args: Args) -> CommandRes
     match periods::get_most_recent_period(&db_pool) {
         Ok(cur_period) => {
             msg.channel_id.say(&ctx.http, "A submission period has already started, run `!m roll` to finish the current submission period.").await.unwrap();
-
         }
         Err(NotFound) => {
             periods::create_period(&db_pool)?;
@@ -503,6 +542,95 @@ pub async fn reopenperiod(ctx: &Context, msg: &Message, args: Args) -> CommandRe
 }
 
 #[command]
+pub async fn endperiod(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let db_pool = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<DBConnectionContainer>()
+            .expect("Expected DBConnection in TypeMap.")
+            .clone()
+    };
+
+    match periods::get_most_recent_period(&db_pool) {
+        Ok(cur_period) => {
+            periods::end_period(&db_pool, cur_period)?;
+            msg.channel_id
+                .say(&ctx.http, "Ended current movie submission without roll!")
+                .await
+                .unwrap();
+        }
+        Err(e) => {
+            msg.channel_id
+                .say(&ctx.http, "No current movie submission period exists.")
+                .await
+                .unwrap();
+        }
+    }
+    Ok(())
+}
+
+#[command]
+pub async fn listperiods(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let db_pool = {
+        let data_read = ctx.data.read().await;
+        data_read
+            .get::<DBConnectionContainer>()
+            .expect("Expected DBConnection in TypeMap.")
+            .clone()
+    };
+
+    match periods::get_periods(&db_pool) {
+        Ok(movie_periods) => {
+            msg.channel_id
+                .send_message(&ctx.http, |m| {
+                    m.embed(|e| {
+                        for movie_period in movie_periods {
+                            e.field("Start Date", movie_period.start_day, true);
+                            if movie_period.end_day.is_some() {
+                                e.field("End Date", movie_period.end_day.unwrap(), true);
+                            }
+
+                            if let Ok(movie_roll) =
+                                rolls::get_roll_by_period(&db_pool, movie_period)
+                            {
+                                let movie_roll_1 = submissions::get_submission_by_id(
+                                    &db_pool,
+                                    movie_roll.selection_1,
+                                )
+                                .unwrap();
+                                let movie_roll_2 = submissions::get_submission_by_id(
+                                    &db_pool,
+                                    movie_roll.selection_2,
+                                )
+                                .unwrap();
+                                e.field("Choice 1", movie_roll_1.title, false);
+                                e.field("Choice 2", movie_roll_2.title, false);
+                            } else {
+                                e.field("Roll", "No Roll!", false);
+                            }
+                        }
+                        e
+                    });
+
+                    m
+                })
+                .await
+                .unwrap();
+        }
+        Err(e) => {
+            msg.channel_id
+                .say(
+                    &ctx.http,
+                    "Could not find a recently closed submission period.",
+                )
+                .await
+                .unwrap();
+        }
+    }
+    Ok(())
+}
+
+#[command]
 pub async fn fixdb(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db_pool = {
         let data_read = ctx.data.read().await;
@@ -529,7 +657,10 @@ pub async fn fixdb(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
                             println!("Found imdb link {}", path_segment);
 
-                            let movie = omdb::query_by_id(String::from(path_segment)).await.unwrap().unwrap();
+                            let movie = omdb::query_by_id(String::from(path_segment))
+                                .await
+                                .unwrap()
+                                .unwrap();
 
                             let mut updated_moviesub = movie_sub.clone();
 

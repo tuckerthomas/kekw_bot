@@ -1,8 +1,8 @@
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
-use crate::models::submission::Submission;
 use crate::models::period::Period;
+use crate::models::submission::Submission;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
 
@@ -27,14 +27,32 @@ pub fn get_all_moviesubs(pool: &Pool<ConnectionManager<SqliteConnection>>) -> Ve
     return results;
 }
 
-pub fn get_submission_by_period_and_user(
+pub fn get_submission_by_id(
     pool: &Pool<ConnectionManager<SqliteConnection>>,
-    search_period: Period,
-    user_id: String
+    search_id: i32,
 ) -> Result<Submission> {
     use crate::schema::submissions::dsl::*;
 
-    match Submission::belonging_to(&search_period).filter(dis_user_id.eq(user_id)).first::<Submission>(&pool.get()?) {
+    match submissions
+        .filter(id.eq(search_id))
+        .first::<Submission>(&pool.get()?)
+    {
+        Ok(submission) => Ok(submission),
+        Err(e) => Err(Box::new(e)),
+    }
+}
+
+pub fn get_submission_by_period_and_user(
+    pool: &Pool<ConnectionManager<SqliteConnection>>,
+    search_period: Period,
+    user_id: String,
+) -> Result<Submission> {
+    use crate::schema::submissions::dsl::*;
+
+    match Submission::belonging_to(&search_period)
+        .filter(dis_user_id.eq(user_id))
+        .first::<Submission>(&pool.get()?)
+    {
         Ok(submission) => Ok(submission),
         Err(e) => Err(Box::new(e)),
     }
@@ -76,7 +94,10 @@ pub fn update_moviesub<'a>(
     }
 }
 
-pub fn delete_moviesub<'a>(pool: &Pool<ConnectionManager<SqliteConnection>>, del_submission: &Submission) -> usize {
+pub fn delete_moviesub<'a>(
+    pool: &Pool<ConnectionManager<SqliteConnection>>,
+    del_submission: &Submission,
+) -> usize {
     use crate::schema::submissions;
     use crate::schema::submissions::dsl::*;
 
@@ -85,11 +106,19 @@ pub fn delete_moviesub<'a>(pool: &Pool<ConnectionManager<SqliteConnection>>, del
         .expect("Error deleting submission")
 }
 
-pub fn check_prev_sub<'a>(conn: &SqliteConnection, cur_period_id: i32, check_dis_user_id: &'a str) -> Vec<Submission> {
+pub fn check_prev_sub<'a>(
+    conn: &SqliteConnection,
+    cur_period_id: i32,
+    check_dis_user_id: &'a str,
+) -> Vec<Submission> {
     use crate::schema::submissions::dsl::*;
 
     let results = submissions
-        .filter(period_id.eq(cur_period_id).and(dis_user_id.eq(check_dis_user_id)))
+        .filter(
+            period_id
+                .eq(cur_period_id)
+                .and(dis_user_id.eq(check_dis_user_id)),
+        )
         .load::<Submission>(conn)
         .expect("Error loading submissions");
 
