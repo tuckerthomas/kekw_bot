@@ -136,12 +136,11 @@ async fn main() {
         .group(&GENERAL_GROUP)
         .group(&MOVIE_GROUP);
 
-    let mut client = Client::new(&token)
+    let mut client = Client::builder(&token)
         .framework(framework)
         .event_handler(Handler)
         .await
         .expect("Err creating client");
-
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());

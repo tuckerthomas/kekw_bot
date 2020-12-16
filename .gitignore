@@ -2,3 +2,5 @@
 .env
 kekw_bot.txt
 local.db
+kekw.db
+.vscode
