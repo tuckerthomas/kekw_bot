@@ -7,8 +7,8 @@ steps:
   image: rust:1
   commands:
   - cargo clean
-  - cargo build --release --verbose --all
-  - cargo test --release --verbose --all
+  - cargo build --release
+  - cargo test --release
 
 - name: registry_deploy  
   image: plugins/docker
