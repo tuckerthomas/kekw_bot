@@ -68,9 +68,7 @@ impl EventHandler for Handler {
                         WEEK_IN_SECONDS
                             - ((now - last_selection.with_timezone(&Utc)).num_seconds()
                                 % WEEK_IN_SECONDS),
-                    );
-
-                    Duration::seconds(10)
+                    )
                 }
 
                 let next_movie_selection_duration = get_next_movie_selection();
@@ -166,7 +164,7 @@ async fn main() {
 
     // Create the framework
     let framework = StandardFramework::new()
-        .configure(|c| c.owners(owners).prefix("~test"))
+        .configure(|c| c.owners(owners).prefix("!"))
         .group(&GENERAL_GROUP)
         .group(&MOVIE_GROUP);
 
