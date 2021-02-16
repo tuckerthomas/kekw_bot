@@ -7,18 +7,18 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+kekw_db = { version = "0.1.0", git = "https://github.com/tuckerthomas/kekw_db" }
 dotenv = "0.15"
 tracing = "0.1"
 tracing-subscriber = "0.2"
-tokio = { version = "0.2", features = ["macros"] }
-diesel = { version = "1.4", features = ["sqlite", "r2d2", "numeric"] }
-diesel_migrations = { version = "1.4", features = ["sqlite"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 rand = { version = "0.7", features = ["small_rng"] }
-chrono = { version = "0.4"}
-serde = { version = "1"}
-serde_json = { version = "1" }
+chrono = "0.4"
+chrono-tz = "0.5"
+serde = "1"
+serde_json = "1"
 reqwest = { version = "0.10", default-features = false, features = ["rustls-tls"] }
 
 [dependencies.serenity]
-version = "0.9"
+version = "0.10"
 features = ["framework", "standard_framework", "collector"]

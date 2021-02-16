@@ -1,62 +1,41 @@
-// Diesel needs this attrubte for macro generation
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-
 // Pull in local modules
 mod commands;
-mod db;
-mod models;
 mod omdb;
-mod schema;
+mod timed;
 mod utils;
 
 // Imports
-use std::{
-    collections::HashSet,
-    env,
-    sync::Arc,
-};
+use std::{collections::HashSet, env, sync::Arc};
+
 use serenity::{
     async_trait,
     client::bridge::gateway::ShardManager,
-    framework::{
-        StandardFramework,
-        standard::macros::group,
-    },
+    framework::{standard::macros::group, StandardFramework},
     http::Http,
+    model::id::GuildId,
     model::{event::ResumedEvent, gateway::Ready},
     prelude::*,
 };
 
 use tracing::{error, info};
-use tracing_subscriber::{
-    FmtSubscriber,
-    EnvFilter,
-};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-
-// Diesel
-use diesel::sqlite::SqliteConnection;
-use diesel::r2d2::{
-    ConnectionManager,
-    Pool
-};
-
-// Use embeded migrations
-diesel_migrations::embed_migrations!("./migrations");
+use kekw_db::KekPool;
 
 // Serenity(Discord)
-use commands::{
-    math::*,
-    movie::*
-};
+use commands::{math::*, movie::*};
 
 struct ShardManagerContainer;
 
 impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<Mutex<ShardManager>>;
+}
+
+// Setup DB Connection data for Context
+pub struct DBConnectionContainer;
+
+impl TypeMapKey for DBConnectionContainer {
+    type Value = KekPool;
 }
 
 struct Handler;
@@ -65,6 +44,55 @@ struct Handler;
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
         info!("Connected as {}", ready.user.name);
+    }
+
+    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
+        info!("Starting Scheduler thread.");
+
+        tokio::spawn(async move {
+            let ctx = Arc::new(ctx);
+            let ctx1 = Arc::clone(&ctx);
+            loop {
+                use chrono::prelude::*;
+                use chrono::{DateTime, Duration, Utc};
+                use chrono_tz::US::Eastern;
+                pub const WEEK_IN_SECONDS: i64 = 604800;
+                pub fn get_next_movie_selection() -> Duration {
+                    //get a hardcoded past reset date / time (17:00 UTC every tuesday)
+                    let last_selection = Eastern.ymd(2021, 2, 11).and_hms(18, 0, 0);
+                    let now: DateTime<Utc> = Utc::now();
+                    //get total seconds between now and the past reset
+                    //take the mod of that divided by a week in seconds
+                    //subtract that amount from current date / time to find previous reset
+                    Duration::seconds(
+                        WEEK_IN_SECONDS
+                            - ((now - last_selection.with_timezone(&Utc)).num_seconds()
+                                % WEEK_IN_SECONDS),
+                    );
+
+                    Duration::seconds(10)
+                }
+
+                let next_movie_selection_duration = get_next_movie_selection();
+
+                info!(
+                    "Next movie selection scheduled for {}",
+                    Utc::now() + next_movie_selection_duration
+                );
+
+                let mut interval_timer =
+                    tokio::time::interval(next_movie_selection_duration.to_std().unwrap());
+
+                // Tick once to clear it??
+                interval_timer.tick().await;
+
+                // Wait for the next interval tick
+                interval_timer.tick().await;
+                timed::jobs::select_movie(&ctx1).await;
+            }
+        })
+        .await
+        .unwrap(); // For async task
     }
 
     async fn resume(&self, _: Context, _: ResumedEvent) {
@@ -80,7 +108,16 @@ struct General;
 #[prefix = "m"]
 #[description = "Submit a movie to Movie Night!"]
 #[default_command(submit)]
-#[commands(deletesub, getsubs, roll, startperiod, reopenperiod, endperiod, listperiods, fixdb)]
+#[commands(
+    deletesub,
+    getsubs,
+    roll,
+    startperiod,
+    reopenperiod,
+    endperiod,
+    listperiods,
+    fixdb
+)]
 struct Movie;
 
 #[tokio::main]
@@ -106,14 +143,13 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber).expect("Failed to start the logger");
 
     // Start sqlite connection
-    let pool = establish_connection();
-    let new_pool = pool.clone();
-    // By default the output is thrown out. If you want to redirect it to stdout, you
-    // should call embedded_migrations::run_with_output.
-    embedded_migrations::run_with_output(&new_pool.get().unwrap(), &mut std::io::stdout()).unwrap(); 
+    let pool = kekw_db::establish_connection();
 
-    let token = env::var("DISCORD_TOKEN")
-        .expect("Expected DISCORD_TOKEN to be set");
+    // Setup Discord bot variables
+    let token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN to be set");
+
+    env::var("MOVIE_NOTIFY_ROLE_ID").expect("Expected MOVIE_NOTIFY_ROLE_ID to be set");
+    env::var("MOVIE_CHANNEL").expect("Expected MOVIE_CHANNEL to be set");
 
     let http = Http::new_with_token(&token);
 
@@ -124,15 +160,13 @@ async fn main() {
             owners.insert(info.owner.id);
 
             (owners, info.id)
-        },
+        }
         Err(why) => panic!("Could not access application info: {:?}", why),
     };
 
     // Create the framework
     let framework = StandardFramework::new()
-        .configure(|c| c
-                   .owners(owners)
-                   .prefix("!"))
+        .configure(|c| c.owners(owners).prefix("~test"))
         .group(&GENERAL_GROUP)
         .group(&MOVIE_GROUP);
 
@@ -145,7 +179,6 @@ async fn main() {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
 
-        use self::db::DBConnectionContainer;
         // Write connection to client data
         data.insert::<DBConnectionContainer>(pool);
     }
@@ -153,10 +186,4 @@ async fn main() {
     if let Err(why) = client.start().await {
         error!("Client error: {:?}", why);
     }
-}
-
-pub fn establish_connection() -> Pool::<ConnectionManager::<SqliteConnection>> {
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL not set!");
-
-    Pool::builder().build(ConnectionManager::<SqliteConnection>::new(database_url)).expect("Could not creat pool")
 }

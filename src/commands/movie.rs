@@ -1,12 +1,15 @@
 use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::prelude::*;
 use serenity::prelude::*;
+use serenity::model::channel::ReactionType;
 
 use tracing::{error, info};
 
-use crate::db::{periods, rolls, submissions, DBConnectionContainer};
+use kekw_db::{periods, rolls, submissions};
 
-use crate::models::submission::Submission;
+use kekw_db::models::submission::Submission;
+
+use crate::DBConnectionContainer;
 
 #[command]
 pub async fn submit(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
@@ -111,7 +114,7 @@ pub async fn getsubs(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
     match periods::get_most_recent_period(&db_pool) {
         Ok(cur_period) => {
             // Query DB
-            let movie_subs = submissions::get_moviesubs(&db_pool.get().unwrap(), cur_period.id);
+            let movie_subs = submissions::get_moviesubs(&db_pool.get().unwrap(), &cur_period);
             info!("Got {} movie submission(s).", movie_subs.len());
 
             // Struct to help with information gathered from the DB
@@ -212,7 +215,7 @@ pub async fn deletesub(ctx: &Context, msg: &Message, args: Args) -> CommandResul
             for user in &msg.mentions {
                 match submissions::get_submission_by_period_and_user(
                     &db_pool,
-                    cur_period,
+                    &cur_period,
                     user.id.to_string(),
                 ) {
                     Ok(sub) => {
@@ -251,7 +254,7 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     match periods::get_most_recent_period(&db_pool) {
         Ok(cur_period) => {
             // Get movie submissions for the current period
-            let movie_subs = submissions::get_moviesubs(&db_pool.get().unwrap(), cur_period.id);
+            let movie_subs = submissions::get_moviesubs(&db_pool.get().unwrap(), &cur_period);
             info!("Got {} movie submission(s).", movie_subs.len());
 
             if movie_subs.len() >= 2 {
@@ -280,10 +283,10 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 // User decided to start a roll
                 if start_roll {
                     // End current submission period
-                    periods::end_period(&db_pool, cur_period)?;
+                    let cur_period = periods::end_period(&db_pool, cur_period)?;
 
                     // Check if a roll already exists
-                    if let Ok(cur_roll) = rolls::get_roll_by_period(&db_pool, cur_period) {
+                    if let Ok(cur_roll) = rolls::get_roll_by_period(&db_pool, &cur_period) {
                         let conf_message = format!("There already exists a roll for this movie submission period, would you like to roll again?");
                         let yes_msg = String::from("Rolling again!");
                         let no_msg = String::from("Cancelling roll.");
@@ -336,12 +339,7 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     let choice_movie2 = movie_subs[choice_2].clone();
 
                     // Insert roll into roll table
-                    rolls::create_roll(
-                        &db_pool,
-                        cur_period.id,
-                        choice_movie1.id,
-                        choice_movie2.id,
-                    )?;
+                    let cur_roll = rolls::create_roll(&db_pool, &cur_period, choice_movie1.id, choice_movie2.id)?;
 
                     use std::convert::TryFrom;
                     // Lookup user by discord id
@@ -364,25 +362,25 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
                     // Respond with movie selection message
                     let msg_movie_selection = msg.channel_id.send_message(&ctx.http, |m| {
-                    m.embed(|e| {
-                        e.title("Movie Emoji Selections!");
-                        e.description("Please react with the two emotes you would like to use for voting. Make sure to only use Emoji's from within this Guild/Server. You have 5 minutes.");
-                        e.field(
-                            &choice_movie1.title,
-                            format!("submitted by {}", choice_nick1),
-                            false
-                        );
-                        e.field(
-                            &choice_movie2.title,
-                            format!("submitted by {}", choice_nick2),
-                            false
-                        );
+                        m.embed(|e| {
+                            e.title("Movie Emoji Selections!");
+                            e.description("Please react with the two emotes you would like to use for voting. Make sure to only use Emoji's from within this Guild/Server. You have 5 minutes.");
+                            e.field(
+                                &choice_movie1.title,
+                                format!("submitted by {}", choice_nick1),
+                                false
+                            );
+                            e.field(
+                                &choice_movie2.title,
+                                format!("submitted by {}", choice_nick2),
+                                false
+                            );
 
-                        e
-                    });
+                            e
+                        });
 
-                    m
-                }).await?;
+                        m
+                    }).await?;
 
                     // Collect reactions from previous message
                     use serenity::futures::StreamExt;
@@ -400,7 +398,6 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                         let mut emoji_check = false;
 
                         for reaction in reactions.clone() {
-                            use serenity::model::channel::ReactionType;
                             emoji_check = match reaction.as_inner_ref().emoji.clone() {
                                 ReactionType::Custom {
                                     animated: _,
@@ -408,6 +405,7 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                                     name: _,
                                 } => {
                                     // TODO: Dumb way to do this?
+                                    // Check if emoji exists in the guild?
                                     match msg
                                         .guild(&ctx.cache)
                                         .await
@@ -430,37 +428,47 @@ pub async fn roll(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                                 .await
                                 .unwrap();
                         } else {
+                            // Delete emoji selection message
                             msg_movie_selection.delete(&ctx.http).await.unwrap();
 
-                            msg.channel_id
-                                .send_message(&ctx.http, |m| {
-                                    m.embed(|e| {
-                                        e.title("Movie Voting!");
-                                        e.field(
-                                            choice_movie1.title,
-                                            format!(
-                                                "submitted by {} use {}",
-                                                choice_nick1,
-                                                reactions[0].clone().as_inner_ref().emoji
-                                            ),
-                                            false,
-                                        );
-                                        e.field(
-                                            choice_movie2.title,
-                                            format!(
-                                                "submitted by {} use {}",
-                                                choice_nick2,
-                                                reactions[1].clone().as_inner_ref().emoji
-                                            ),
-                                            false,
-                                        );
+                            let reaction_1 = reactions[0].clone();
+                            let reaction_2 = reactions[1].clone();
 
-                                        e
-                                    });
+                            // Send voting message
+                            let vote_msg = msg.channel_id.send_message(&ctx.http, |m| {
+                                m.embed(|e| {
+                                    e.title("Movie Voting!");
+                                    e.field(
+                                        choice_movie1.title,
+                                        format!(
+                                            "submitted by {} use {}",
+                                            choice_nick1,
+                                            &reaction_1.as_inner_ref().emoji
+                                        ),
+                                        false,
+                                    );
+                                    e.field(
+                                        choice_movie2.title,
+                                        format!(
+                                            "submitted by {} use {}",
+                                            choice_nick2,
+                                            &reaction_2.clone().as_inner_ref().emoji
+                                        ),
+                                        false,
+                                    );
+                                    e
+                                });
 
-                                    m
-                                })
-                                .await?;
+                                m
+                            }).await?;
+
+                            let emoji_1 = &reaction_1.as_inner_ref().emoji;
+                            let emoji_2 = &reaction_2.as_inner_ref().emoji;
+
+                            // Convert u64 to string since postgresql doesnt have u64
+                            periods::set_vote_message(&db_pool, cur_period, vote_msg.id.as_u64().to_string())?;
+
+                            rolls::set_selection_emotes(&db_pool, cur_roll, emoji_1.to_string(), emoji_2.to_string())?;
                         }
                     } else {
                         msg.reply(&ctx.http, "No reactions supplied, try rolling later.")
@@ -591,7 +599,7 @@ pub async fn listperiods(ctx: &Context, msg: &Message, args: Args) -> CommandRes
                             }
 
                             if let Ok(movie_roll) =
-                                rolls::get_roll_by_period(&db_pool, movie_period)
+                                rolls::get_roll_by_period(&db_pool, &movie_period)
                             {
                                 let movie_roll_1 = submissions::get_submission_by_id(
                                     &db_pool,
