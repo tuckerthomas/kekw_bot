@@ -20,6 +20,26 @@ pub async fn submit(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     } else {
         let movie_submission = args.rest();
 
+        let movie_submission: String = movie_submission.split_whitespace().enumerate().map(|(i,s)| {
+
+            let mut empty_string = String::from(" ");
+
+            let formatted_string: String = s.chars().enumerate().map(|(i, c)| {
+                if i == 0 {
+                    c.to_uppercase().to_string()
+                } else {
+                    c.to_string()
+                }
+            }).collect::<String>();
+
+            if i != 0 {
+                empty_string.push_str(&formatted_string);
+                empty_string
+            } else {
+                formatted_string
+            }
+        }).collect::<String>();
+
         // Pull DBConnection from local context
         let db_pool = {
             let data_read = ctx.data.read().await;
@@ -42,7 +62,7 @@ pub async fn submit(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                     let num_added = submissions::create_moviesub(
                         &db_pool.get().unwrap(),
                         &msg.author.id.to_string(),
-                        movie_submission,
+                        &movie_submission,
                         "test",
                         cur_period.id,
                     );
