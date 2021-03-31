@@ -1,0 +1,26 @@
+kind: pipeline
+type: docker
+name: default
+
+platform:
+  os: linux
+  arch: arm64
+
+steps:
+- name: test
+  image: rust:1
+  commands:
+  - cargo clean
+  - cargo build --release
+  - cargo test --release
+
+- name: registry_deploy  
+  image: plugins/docker
+  settings:
+    registry: registry.tuckerthomas.com
+    username: tthomas
+    password: test
+    repo: registry.tuckerthomas.com/kekw
+    insecure: true
+    dockerfile: Dockerfile
+    tags: "0.1"
